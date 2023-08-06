@@ -16,6 +16,7 @@ ASCharacter::ASCharacter()
 	PrimaryActorTick.bCanEverTick = true;
 
 	SpringArmComp = CreateDefaultSubobject<USpringArmComponent>("SpringArmComp");
+	SpringArmComp->bUsePawnControlRotation = true;
 	SpringArmComp->SetupAttachment(RootComponent);
 
 	CameraComp = CreateDefaultSubobject<UCameraComponent>("CameraComp");
@@ -61,30 +62,49 @@ void ASCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponen
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &ASCharacter::Move);
 		//Turning
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &ASCharacter::Look);
+		//Magic Projectile
+		EnhancedInputComponent->BindAction(MPAction, ETriggerEvent::Triggered, this, &ASCharacter::MP);
+		//Jump
+		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ASCharacter::Leap);
 	}
 }
 
 void ASCharacter::Move(const FInputActionValue& Value)
 {
-	// input is a Vector2D
-	const float InputValue = Value.Get<float>();
+	const FVector2D InputValue = Value.Get<FVector2D>();
 
-	if(Controller && InputValue != 0.f)
-	{
-		FVector Forward = GetActorForwardVector();
-		AddMovementInput(Forward, InputValue);
-	}
-	
+	const FRotator Rotation = Controller->GetControlRotation();
+	const FRotator YawRotation(0.f, Rotation.Yaw, 0.f);
+
+	const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+	AddMovementInput(ForwardDirection, InputValue.Y);
+	const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+	AddMovementInput(RightDirection, InputValue.X);
 }
 
 void ASCharacter::Look(const FInputActionValue& Value)
 {
 	const FVector2D LookAxisValue = Value.Get<FVector2D>();
 
-	if(GetController())
-	{
-		AddControllerYawInput(LookAxisValue.X);
-		AddControllerYawInput(LookAxisValue.Y);
-	}
+	AddControllerPitchInput(LookAxisValue.Y);
+
+	AddControllerYawInput(LookAxisValue.X);
+}
+
+void ASCharacter::MP()
+{
+	FVector HandLocation = GetMesh()->GetSocketLocation("Muzzle_01");
+
+	FTransform SpawnTM = FTransform(GetControlRotation(), HandLocation);
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	GetWorld()->SpawnActor<AActor>(ProjectileClass, SpawnTM, SpawnParams);
+}
+
+void ASCharacter::Leap()
+{
+	Jump();
 }
 
